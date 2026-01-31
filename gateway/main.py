@@ -5,6 +5,8 @@ import aio_pika
 from fastapi import FastAPI
 from pydantic import BaseModel
 
+from config import settings
+
 
 class VideoRequest(BaseModel):
     url: str
@@ -18,7 +20,7 @@ rabbit_channel = None
 async def lifespan(app: FastAPI):
     global rabbit_connection, rabbit_channel
     print("Connecting to RabbitMQ...")
-    rabbit_connection = await aio_pika.connect_robust("amqp://guest:guest@localhost/")
+    rabbit_connection = await aio_pika.connect_robust(settings.rabbitmq_url)
     rabbit_channel = await rabbit_connection.channel()
     await rabbit_channel.declare_queue("transcription_queue", durable=True)
     print("Connected.")
