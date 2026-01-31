@@ -1,7 +1,49 @@
-from fastapi import FastAPI
+import json
+from contextlib import asynccontextmanager
 
-app = FastAPI()
+import aio_pika
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+
+class VideoRequest(BaseModel):
+    url: str
+
+
+rabbit_connection = None
+rabbit_channel = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global rabbit_connection, rabbit_channel
+    print("Connecting to RabbitMQ...")
+    rabbit_connection = await aio_pika.connect_robust("amqp://guest:guest@localhost/")
+    rabbit_channel = await rabbit_connection.channel()
+    await rabbit_channel.declare_queue("transcription_queue", durable=True)
+    print("Connected.")
+
+    yield
+
+    await rabbit_channel.close()
+    await rabbit_connection.close()
+    print("Disconnected.")
+
+
+app = FastAPI(lifespan=lifespan)
+
 
 @app.get("/")
 async def root():
     return {"message": "Gateway is alive!"}
+
+
+@app.post("process/")
+async def process_video(request: VideoRequest):
+    message_body = json.dumps({"url": request.url}).encode()
+
+    await rabbit_channel.default_exchange.publish(
+        aio_pika.Message(body=message_body), routing_key="transcription_queue"
+    )
+
+    return {"status": "queued", "url": request.url}
