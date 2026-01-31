@@ -40,7 +40,7 @@ async def root():
     return {"message": "Gateway is alive!"}
 
 
-@app.post("process/")
+@app.post("/process")
 async def process_video(request: VideoRequest):
     message_body = json.dumps({"url": request.url}).encode()
 
