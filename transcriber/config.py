@@ -7,11 +7,12 @@ class Settings(BaseSettings):
     RABBITMQ_HOST: str = "localhost"
     RABBITMQ_PORT: int = 5672
 
-    QUEUE_NAME: str = "transcription_queue"
+    TRANSCRIPTION_QUEUE_NAME: str = "transcription_queue"
+    SUMMARY_QUEUE_NAME: str = "summary_queue"
 
     @property
     def rabbitmq_url(self) -> str:
-        return f"ampq://{self.RABBITMQ_USER}:{self.RABBITMQ_PASS}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/"
+        return f"amqp://{self.RABBITMQ_USER}:{self.RABBITMQ_PASS}@{self.RABBITMQ_HOST}:{self.RABBITMQ_PORT}/"
 
     class Config:
         env_file = ".env"

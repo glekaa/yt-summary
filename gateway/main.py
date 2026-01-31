@@ -22,7 +22,7 @@ async def lifespan(app: FastAPI):
     print("Connecting to RabbitMQ...")
     rabbit_connection = await aio_pika.connect_robust(settings.rabbitmq_url)
     rabbit_channel = await rabbit_connection.channel()
-    await rabbit_channel.declare_queue("transcription_queue", durable=True)
+    await rabbit_channel.declare_queue(settings.TRANSCRIPTION_QUEUE_NAME, durable=True)
     print("Connected.")
 
     yield
@@ -45,7 +45,8 @@ async def process_video(request: VideoRequest):
     message_body = json.dumps({"url": request.url}).encode()
 
     await rabbit_channel.default_exchange.publish(
-        aio_pika.Message(body=message_body), routing_key="transcription_queue"
+        aio_pika.Message(body=message_body),
+        routing_key=settings.TRANSCRIPTION_QUEUE_NAME,
     )
 
     return {"status": "queued", "url": request.url}
