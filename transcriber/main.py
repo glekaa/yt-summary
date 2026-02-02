@@ -4,6 +4,7 @@ import os
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
+from db import AsyncSessionLocal, StatusEnum, Task
 
 from config import settings
 from download import download_audio
@@ -29,6 +30,15 @@ async def main():
                 body = message.body.decode()
                 data = json.loads(body)
                 url = data["url"]
+                task_id = data["task_id"]
+                async with AsyncSessionLocal() as session:
+                    task = await session.get(Task, task_id)
+                    if not task:
+                        print(f"ERROR: Task {task_id} not found, skipping")
+                        return
+                    task.status = StatusEnum.PROCESSING
+                    await session.commit()
+
                 print(f"Received message: {data}")
                 try:
                     print("[1/2] Downloading...")
@@ -38,7 +48,7 @@ async def main():
                     print("[2/2] Transcribing...")
                     text = await asyncio.to_thread(transcribe_audio, file_path)
 
-                    payload = json.dumps({"url": url, "text": text}).encode()
+                    payload = json.dumps({"task_id": task_id, "text": text}).encode()
                     await rabbit_channel.default_exchange.publish(
                         aio_pika.Message(body=payload),
                         routing_key=settings.SUMMARY_QUEUE_NAME,

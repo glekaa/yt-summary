@@ -2,11 +2,11 @@ import json
 from contextlib import asynccontextmanager
 
 import aio_pika
+from db import AsyncSessionLocal, Base, Task, engine
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 from config import settings
-from db import Task, AsyncSessionLocal, engine, Base
 
 
 class VideoRequest(BaseModel):
@@ -55,7 +55,6 @@ async def process_video(request: VideoRequest):
         session.add(task)
         await session.commit()
         await session.refresh(task)
-        task_id = task.id
 
     # Отправляем в очередь
     message_body = json.dumps({"task_id": task_id, "url": request.url}).encode()

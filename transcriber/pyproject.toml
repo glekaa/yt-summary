@@ -6,8 +6,12 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "aio-pika>=9.5.8",
+    "db",
     "openai-whisper>=20250625",
     "pydantic-settings>=2.12.0",
     "torch>=2.10.0",
     "yt-dlp>=2026.1.29",
 ]
+
+[tool.uv.sources]
+db = { path = "../libs/db", editable = true }

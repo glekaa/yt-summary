@@ -3,20 +3,27 @@ import json
 
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
+from db import AsyncSessionLocal, StatusEnum, Task
 
 from ai import summarize_text
 from config import settings
 
 
-async def process_message(message: AbstractIncomingMessage) -> dict:
+async def process_message(message: AbstractIncomingMessage):
     async with message.process():
         print("Received a task, working...")
         body = message.body.decode()
         data = json.loads(body)
+        task_id = data["task_id"]
         summarized_text = await summarize_text(data["text"])
-        processed_data = {"url": data["url"], "text": summarized_text}
-        print(processed_data)
-        return processed_data
+        async with AsyncSessionLocal() as session:
+            task = await session.get(Task, task_id)
+            if not task:
+                print(f"ERROR: Task {task_id} not found, skipping")
+                return
+            task.status = StatusEnum.DONE
+            task.result = summarized_text
+            await session.commit()
 
 
 async def main():
