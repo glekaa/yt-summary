@@ -1,6 +1,79 @@
 services:
   rabbitmq:
     image: rabbitmq:3-management
+    container_name: yt-summary-rabbitmq
     ports:
       - "5672:5672"
       - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gateway:
+    build: ./gateway
+    container_name: yt-summary-gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      DATABASE_HOST: db
+      DATABASE_USER: user
+      DATABASE_PASS: password
+      DATABASE_NAME: ytsummary
+
+  transcriber:
+    build: ./transcriber
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+
+  summarizer:
+    build: ./summarizer
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway" # Чтобы видеть Ollama на хосте
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      # Для Linux пользователей может потребоваться заменить host.docker.internal на 172.17.0.1
+      # Но для Mac/Windows это стандарт
+      OLLAMA_HOST: http://host.docker.internal:11434
+
+  db:
+    image: postgres:15-alpine
+    container_name: yt-summary-db
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: ytsummary
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U user -d ytsummary"]
+        interval: 5s
+        timeout: 5s
+        retries: 5
+
+volumes:
+  rabbitmq_data:
+  pgdata:
