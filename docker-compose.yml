@@ -17,7 +17,9 @@ services:
       retries: 5
 
   gateway:
-    build: ./gateway
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
     container_name: yt-summary-gateway
     ports:
       - "8000:8000"
@@ -30,21 +32,31 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
       DATABASE_HOST: db
+      DATABASE_PORT: 5432
       DATABASE_USER: user
       DATABASE_PASS: password
       DATABASE_NAME: ytsummary
 
   transcriber:
-    build: ./transcriber
+    build:
+      context: .
+      dockerfile: transcriber/Dockerfile
     depends_on:
       rabbitmq:
         condition: service_healthy
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_USER: user
+      DATABASE_PASS: password
+      DATABASE_NAME: ytsummary
 
   summarizer:
-    build: ./summarizer
+    build:
+      context: .
+      dockerfile: summarizer/Dockerfile
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -53,8 +65,11 @@ services:
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
-      # Для Linux пользователей может потребоваться заменить host.docker.internal на 172.17.0.1
-      # Но для Mac/Windows это стандарт
+      DATABASE_HOST: db
+      DATABASE_PORT: 5432
+      DATABASE_USER: user
+      DATABASE_PASS: password
+      DATABASE_NAME: ytsummary
       OLLAMA_HOST: http://host.docker.internal:11434
 
   db:

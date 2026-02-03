@@ -7,9 +7,14 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1
 ENV UV_LINK_MODE=copy
 
-COPY pyproject.toml uv.lock ./
+# Копируем shared library
+COPY libs/db /libs/db
+
+# Копируем зависимости сервиса
+COPY summarizer/pyproject.toml summarizer/uv.lock ./
 RUN uv sync --frozen --no-install-project --no-dev
 
-COPY . .
+# Копируем код сервиса
+COPY summarizer/ .
 
 CMD ["uv", "run", "python", "main.py"]
