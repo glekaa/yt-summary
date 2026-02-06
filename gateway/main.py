@@ -1,13 +1,14 @@
 import json
+import re
 from contextlib import asynccontextmanager
 from typing import TypedDict, cast
 
 import aio_pika
 from aio_pika.abc import AbstractRobustChannel, AbstractRobustConnection
-from db import Base, Task, engine, get_db
-from fastapi import Depends, FastAPI, Request, status
+from db import Base, StatusEnum, Task, engine, get_db
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -33,9 +34,7 @@ async def lifespan(app: FastAPI):
     print("Database tables created.")
 
     print("Connecting to RabbitMQ...")
-    await channel.declare_queue(
-        settings.TRANSCRIPTION_QUEUE_NAME, durable=True
-    )
+    await channel.declare_queue(settings.TRANSCRIPTION_QUEUE_NAME, durable=True)
     print("Connected.")
 
     yield {"rabbit_connection": connection, "rabbit_channel": channel}
@@ -81,10 +80,17 @@ async def process_video(
 
     # Send task to queue
     message_body = json.dumps({"task_id": task_id, "url": request.url}).encode()
-    await channel.default_exchange.publish(
-        aio_pika.Message(body=message_body),
-        routing_key=settings.TRANSCRIPTION_QUEUE_NAME,
-    )
+    try:
+        await channel.default_exchange.publish(
+            aio_pika.Message(body=message_body),
+            routing_key=settings.TRANSCRIPTION_QUEUE_NAME,
+        )
+    except Exception as e:
+        task.status = StatusEnum.FAILED
+        await session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Queue unavailable"
+        )
 
     return {"task_id": task_id, "status": "queued"}
 
@@ -93,7 +99,9 @@ async def process_video(
 async def get_task(task_id: int, session: AsyncSession = Depends(get_db)):
     task = await session.get(Task, task_id)
     if not task:
-        return {"error": "Task not found"}
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Task not found"
+        )
     return {
         "id": task.id,
         "url": task.url,
