@@ -7,6 +7,7 @@ requires-python = ">=3.13"
 dependencies = [
     "aio-pika>=9.5.8",
     "aiosqlite>=0.22.1",
+    "asgi-lifespan>=2.1.0",
     "db",
     "fastapi>=0.128.0",
     "httpx>=0.28.1",

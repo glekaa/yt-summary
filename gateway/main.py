@@ -1,8 +1,9 @@
 import json
 from contextlib import asynccontextmanager
+from typing import TypedDict, cast
 
 import aio_pika
-from aio_pika.abc import AbstractRobustChannel
+from aio_pika.abc import AbstractRobustChannel, AbstractRobustConnection
 from db import Base, Task, engine, get_db
 from fastapi import Depends, FastAPI, Request, status
 from fastapi.responses import JSONResponse
@@ -18,14 +19,13 @@ class VideoRequest(BaseModel):
 
 
 def get_rabbit_channel(request: Request):
-    return request.app.state.rabbit_channel
+    return cast(AbstractRobustChannel, request.state.rabbit_channel)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     connection = await aio_pika.connect_robust(settings.rabbitmq_url)
-    app.state.rabbit_connection = connection
-    app.state.rabbit_channel = await connection.channel()
+    channel = await connection.channel()
 
     # Создаём таблицы (временно, потом заменим на Alembic)
     async with engine.begin() as conn:
@@ -33,15 +33,15 @@ async def lifespan(app: FastAPI):
     print("Database tables created.")
 
     print("Connecting to RabbitMQ...")
-    await app.state.rabbit_channel.declare_queue(
+    await channel.declare_queue(
         settings.TRANSCRIPTION_QUEUE_NAME, durable=True
     )
     print("Connected.")
 
-    yield
+    yield {"rabbit_connection": connection, "rabbit_channel": channel}
 
-    await app.state.rabbit_channel.close()
-    await app.state.rabbit_connection.close()
+    await channel.close()
+    await connection.close()
     print("Disconnected.")
 
 
@@ -50,7 +50,7 @@ app = FastAPI(lifespan=lifespan)
 
 @app.get("/health")
 async def health(request: Request, session: AsyncSession = Depends(get_db)):
-    rabbit_ok = request.app.state.rabbit_channel is not None
+    rabbit_ok = request.state.rabbit_channel is not None
     try:
         await session.execute(text("SELECT 1"))
         db_ok = True

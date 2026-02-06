@@ -15,14 +15,23 @@ async def process_message(message: AbstractIncomingMessage):
         body = message.body.decode()
         data = json.loads(body)
         task_id = data["task_id"]
-        summarized_text = await summarize_text(data["text"])
+
+        try:
+            summarized_text = await summarize_text(data["text"])
+            new_status = StatusEnum.DONE
+            result = summarized_text
+        except Exception as e:
+            print(f"Summarization failed for {task_id}: {e}")
+            new_status = StatusEnum.FAILED
+            result = None
+
         async with AsyncSessionLocal() as session:
             task = await session.get(Task, task_id)
             if not task:
                 print(f"ERROR: Task {task_id} not found, skipping")
                 return
-            task.status = StatusEnum.DONE
-            task.result = summarized_text
+            task.status = new_status
+            task.result = result
             await session.commit()
 
 
