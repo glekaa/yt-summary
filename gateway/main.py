@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+from tenacity import retry, stop_after_attempt, stop_never, wait_exponential, retry_if_exception_type
 
 from config import settings
 
@@ -23,19 +24,43 @@ def get_rabbit_channel(request: Request):
     return cast(AbstractRobustChannel, request.state.rabbit_channel)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
+@retry(
+    stop=stop_never,
+    wait=wait_exponential(multiplier=1, min=2, max=60),
+    retry=retry_if_exception_type((ConnectionError, OSError, aio_pika.AMQPException)),
+)
+async def connect_to_rabbitmq():
+    """Connect to RabbitMQ with infinite retry."""
+    print("Connecting to RabbitMQ...")
     connection = await aio_pika.connect_robust(settings.rabbitmq_url)
-    channel = await connection.channel()
+    print("Connected to RabbitMQ.")
+    return connection
 
-    # Создаём таблицы (временно, потом заменим на Alembic)
+
+@retry(
+    stop=stop_never,
+    wait=wait_exponential(multiplier=1, min=2, max=60),
+    retry=retry_if_exception_type((ConnectionError, OSError, Exception)),
+)
+async def wait_for_database():
+    """Wait for database to be available."""
+    print("Connecting to database...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("Database tables created.")
+    print("Database ready.")
 
-    print("Connecting to RabbitMQ...")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Graceful startup: wait for database
+    await wait_for_database()
+    
+    # Graceful startup: wait for RabbitMQ
+    connection = await connect_to_rabbitmq()
+    channel = await connection.channel()
+
     await channel.declare_queue(settings.TRANSCRIPTION_QUEUE_NAME, durable=True)
-    print("Connected.")
+    print("Gateway ready.")
 
     yield {"rabbit_connection": connection, "rabbit_channel": channel}
 
@@ -78,18 +103,27 @@ async def process_video(
     await session.refresh(task)
     task_id = task.id
 
-    # Send task to queue
+    # Send task to queue with retry logic
     message_body = json.dumps({"task_id": task_id, "url": request.url}).encode()
-    try:
+    
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        reraise=True,
+    )
+    async def publish_message():
         await channel.default_exchange.publish(
             aio_pika.Message(body=message_body),
             routing_key=settings.TRANSCRIPTION_QUEUE_NAME,
         )
+    
+    try:
+        await publish_message()
     except Exception as e:
         task.status = StatusEnum.FAILED
         await session.commit()
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Queue unavailable"
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Queue unavailable after retries"
         )
 
     return {"task_id": task_id, "status": "queued"}

@@ -9,6 +9,7 @@ dependencies = [
     "db",
     "ollama>=0.6.1",
     "pydantic-settings>=2.12.0",
+    "tenacity>=9.0.0",
 ]
 
 [tool.uv.sources]

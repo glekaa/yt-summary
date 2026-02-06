@@ -952,6 +952,15 @@ wheels = [
 ]
 
 [[package]]
+name = "tenacity"
+version = "9.1.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/1e/4a/c3357c8742f361785e3702bb4c9c68c4cb37a80aa657640b820669be5af1/tenacity-9.1.3.tar.gz", hash = "sha256:a6724c947aa717087e2531f883bde5c9188f603f6669a9b8d54eb998e604c12a", size = 49002, upload-time = "2026-02-05T06:33:12.866Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/6b/cdc85edb15e384d8e934aad89638cc8646e118c80de94c60125d0fc0a185/tenacity-9.1.3-py3-none-any.whl", hash = "sha256:51171cfc6b8a7826551e2f029426b10a6af189c5ac6986adcd7eb36d42f17954", size = 28858, upload-time = "2026-02-05T06:33:11.219Z" },
+]
+
+[[package]]
 name = "tiktoken"
 version = "0.12.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1061,6 +1070,7 @@ dependencies = [
     { name = "db" },
     { name = "openai-whisper" },
     { name = "pydantic-settings" },
+    { name = "tenacity" },
     { name = "torch" },
     { name = "yt-dlp" },
 ]
@@ -1071,6 +1081,7 @@ requires-dist = [
     { name = "db", editable = "../libs/db" },
     { name = "openai-whisper", specifier = ">=20250625" },
     { name = "pydantic-settings", specifier = ">=2.12.0" },
+    { name = "tenacity", specifier = ">=9.0.0" },
     { name = "torch", specifier = ">=2.10.0" },
     { name = "yt-dlp", specifier = ">=2026.1.29" },
 ]

@@ -4,9 +4,49 @@ import json
 import aio_pika
 from aio_pika.abc import AbstractIncomingMessage
 from db import AsyncSessionLocal, StatusEnum, Task
+from sqlalchemy.exc import OperationalError
+from tenacity import retry, stop_after_attempt, stop_never, wait_exponential, retry_if_exception_type
 
 from ai import summarize_text
 from config import settings
+
+
+# Retry decorator for database operations
+def db_retry():
+    return retry(
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=2, max=30),
+        retry=retry_if_exception_type((OperationalError, ConnectionError, OSError)),
+        reraise=True,
+    )
+
+
+@db_retry()
+async def update_task_status(task_id: int, status: StatusEnum, result: str | None = None):
+    """Update task status with retry logic."""
+    async with AsyncSessionLocal() as session:
+        task = await session.get(Task, task_id)
+        if not task:
+            print(f"ERROR: Task {task_id} not found")
+            return False
+        task.status = status
+        if result is not None:
+            task.result = result
+        await session.commit()
+        return True
+
+
+@retry(
+    stop=stop_never,
+    wait=wait_exponential(multiplier=1, min=2, max=60),
+    retry=retry_if_exception_type((ConnectionError, OSError, aio_pika.AMQPException)),
+)
+async def connect_to_rabbitmq():
+    """Connect to RabbitMQ with infinite retry."""
+    print("Connecting to RabbitMQ...")
+    connection = await aio_pika.connect_robust(settings.rabbitmq_url)
+    print("Connected to RabbitMQ.")
+    return connection
 
 
 async def process_message(message: AbstractIncomingMessage):
@@ -25,18 +65,14 @@ async def process_message(message: AbstractIncomingMessage):
             new_status = StatusEnum.FAILED
             result = None
 
-        async with AsyncSessionLocal() as session:
-            task = await session.get(Task, task_id)
-            if not task:
-                print(f"ERROR: Task {task_id} not found, skipping")
-                return
-            task.status = new_status
-            task.result = result
-            await session.commit()
+        # Update task with retry
+        await update_task_status(task_id, new_status, result)
+        print(f"Task {task_id} completed with status: {new_status.value}")
 
 
 async def main():
-    rabbit_connection = await aio_pika.connect_robust(settings.rabbitmq_url)
+    # Graceful startup: wait for RabbitMQ
+    rabbit_connection = await connect_to_rabbitmq()
 
     async with rabbit_connection:
         rabbit_channel = await rabbit_connection.channel()
@@ -44,6 +80,9 @@ async def main():
         summary_queue = await rabbit_channel.declare_queue(
             settings.SUMMARY_QUEUE_NAME, durable=True
         )
+
+        print("Ready. Waiting for messages...")
+
         await summary_queue.consume(process_message)
         await asyncio.get_running_loop().create_future()
 
