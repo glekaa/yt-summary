@@ -5,7 +5,7 @@ class Settings(BaseSettings):
     DATABASE_USER: str = "user"
     DATABASE_PASS: str = "password"
     DATABASE_HOST: str = "localhost"
-    DATABASE_PORT: int = 5433
+    DATABASE_PORT: int = 5432
     DATABASE_NAME: str = "ytsummary"
 
     @property

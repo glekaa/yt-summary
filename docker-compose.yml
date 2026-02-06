@@ -31,6 +31,8 @@ services:
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
       DATABASE_HOST: db
       DATABASE_PORT: 5432
       DATABASE_USER: user
@@ -47,6 +49,8 @@ services:
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
       DATABASE_HOST: db
       DATABASE_PORT: 5432
       DATABASE_USER: user
@@ -65,12 +69,15 @@ services:
     environment:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_PORT: 5672
+      RABBITMQ_USER: guest
+      RABBITMQ_PASS: guest
       DATABASE_HOST: db
       DATABASE_PORT: 5432
       DATABASE_USER: user
       DATABASE_PASS: password
       DATABASE_NAME: ytsummary
       OLLAMA_HOST: http://host.docker.internal:11434
+      OLLAMA_MODEL: qwen3:4b
 
   db:
     image: postgres:15-alpine
